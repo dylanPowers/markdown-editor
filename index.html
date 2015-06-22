@@ -336,6 +336,7 @@ the inspiration to this, and some handy implementation hints, came.
     });
 
     editor.on('change', update);
+    window.onhashchange = loadFromHash;
 
 
 
@@ -434,35 +435,49 @@ the inspiration to this, and some handy implementation hints, came.
 
 
     function updateHash(){
-      window.location.hash = btoa( // base64 so url-safe
-        RawDeflate.deflate( // gzip
-          unescape(encodeURIComponent( // convert to utf8
-            editor.getValue()
-          ))
-        )
-      );
+      req = new XMLHttpRequest();
+      req.onload = function() {
+        setLocationHash('/ipfs/' + JSON.parse(req.responseText)['Hash']);
+      };
+      req.open("POST", "/api/v0/add");
+      var form = new FormData();
+      form.append("file", new Blob([editor.getValue()]), "");
+      req.send(form);
+    }
+
+    var expectedHash;
+    function setLocationHash(hash) {
+      expectedHash = hash;
+      window.location.hash = hash;
+    }
+
+    function loadFromHash() {
+      var h = window.location.hash.replace(/^#/, '');
+      if (h !== expectedHash) {
+        var view = false;
+        if(h.slice(0,5) == 'view:'){
+          view = true;
+          h = h.slice(5);
+        }
+
+        req = new XMLHttpRequest();
+        req.onload = function() {
+          editor.setValue(req.responseText);
+          setOutput(editor.getValue());
+          console.log(h);
+          if (view) {
+            document.body.className = 'view';
+          }
+        };
+        req.open("GET", h);
+        req.send();
+      }
     }
 
     if(window.location.hash){
-      var h = window.location.hash.replace(/^#/, '');
-      if(h.slice(0,5) == 'view:'){
-        setOutput(decodeURIComponent(escape(RawDeflate.inflate(atob(h.slice(5))))));
-        document.body.className = 'view';
-      }else{
-        editor.setValue(
-          decodeURIComponent(escape(
-            RawDeflate.inflate(
-              atob(
-                h
-              )
-            )
-          ))
-        );
-        update(editor);
-        editor.focus();
-      }
+      loadFromHash();
     }else{
-      update(editor);
+      setOutput(editor.getValue());
       editor.focus();
     }
   </script>
